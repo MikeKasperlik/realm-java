@@ -16,51 +16,71 @@
 
 package io.realm;
 
+import android.content.Context;
+import android.support.test.InstrumentationRegistry;
 import android.support.test.runner.AndroidJUnit4;
 
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
 
+import io.realm.entities.StringOnly;
+
+import static android.support.test.InstrumentationRegistry.getContext;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 @RunWith(AndroidJUnit4.class)
 public class RealmCompactTests {
+    private Context context;
 
-    @Override
-    protected void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
+        context = InstrumentationRegistry.getInstrumentation().getContext();
         Realm.init(getContext());
     }
 
+    @After
+    public void tearDown() {
+    }
 
-    public void testRealmCompact() {
-        File directory = getContext().getExternalFilesDir(null);
+    @Test
+    public void compactExternalRealm() {
+        File directory = context.getExternalFilesDir(null);
         directory.mkdirs();
-
         assertTrue(directory.exists());
 
-        RealmConfiguration config = new RealmConfiguration.Builder().directory(directory).name("somerealm.realm").build();
+        RealmConfiguration config
+            = new RealmConfiguration.Builder().directory(directory).name("somerealm.realm").build();
         Realm realm = Realm.getInstance(config);
 
         File realmFile = new File(config.getPath());
         assertTrue(realmFile.exists() && realmFile.canWrite());
 
-        { // simple read/write
-            Test test = new Test();
+        StringOnly test = new StringOnly();
+        test.setChars("na na na na, na na na na, hey hey, goodbye");
 
-            realm.beginTransaction();
-            try {
-                realm.copyToRealm(test);
+        realm.beginTransaction();
+        try {
+            realm.copyToRealm(test);
+            realm.commitTransaction();
+            assertTrue(realm.where(StringOnly.class).count() > 0);
 
-                realm.commitTransaction();
-            } catch (Exception e) {
-                realm.cancelTransaction();
-                fail();
-            }
+            realm.close();
 
-            assertTrue(realm.where(Test.class).count() > 0);
+            assertTrue(Realm.compactRealm(config));
         }
+        catch (Exception e) {
+            realm.cancelTransaction();
+            realm.close();
 
-        realm.close();
-
-        assertTrue(Realm.compactRealm(config));
+            fail();
+        }
+        finally {
+            Realm.deleteRealm(config);
+        }
     }
 }
